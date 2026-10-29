@@ -2060,6 +2060,21 @@
             gap: 8px;
         }
 
+        .mBoughtPriceRow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mBoughtPriceRow input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .mBoughtPriceRow .btn {
+            flex-shrink: 0;
+        }
+
         .mPriceCard {
             background: var(--inputBg);
             border: 1px solid rgba(0, 0, 0, 0.06);
@@ -12490,7 +12505,10 @@ body[data-theme="dark"] #settingsBack.pageView #settingsModal .sSubHead {
                 </div>
                 <div class="mField" id="mBoughtPriceField" style="display:none">
                     <div class="mLabel"><i class="ph ph-check-circle"></i> Alış Fiyatı</div>
-                    <input type="text" id="mBoughtPriceDisplay" placeholder="₺ —" disabled />
+                    <div class="mBoughtPriceRow">
+                        <input type="text" id="mBoughtPriceDisplay" placeholder="₺ —" disabled />
+                        <button type="button" id="editBoughtPrice" class="btn" aria-label="Alış fiyatını düzelt"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Düzelt</button>
+                    </div>
                 </div>
                 <div class="mFoot">
                     <button class="btn danger" id="deleteItem3">Sil</button>
@@ -12539,16 +12557,16 @@ body[data-theme="dark"] #settingsBack.pageView #settingsModal .sSubHead {
     </div>
 
     <!-- Purchase Modal -->
-    <div id="purchaseBack" class="modalBack" role="dialog" aria-modal="true">
+    <div id="purchaseBack" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="purchaseTitle">
         <div class="modal" id="purchaseModal">
             <div class="handle"><span></span></div>
             <div class="mHead">
-                <strong>Satın Alma Onayı</strong>
+                <strong id="purchaseTitle">Satın Alma Onayı</strong>
                 <button id="closePurchase" class="btn">İptal</button>
             </div>
             <div class="purchaseBody">
-                <h3>Ne kadara aldın?</h3>
-                <input id="purchasePrice" type="text" inputmode="numeric" placeholder="₺ 0" />
+                <h3 id="purchasePrompt">Ne kadara aldın?</h3>
+                <input id="purchasePrice" type="text" inputmode="numeric" placeholder="₺ 0" aria-labelledby="purchasePrompt" />
                 <div class="purchaseBtns">
                     <button id="confirmPurchase" class="btn primary">Onayla</button>
                 </div>
@@ -16248,7 +16266,7 @@ body[data-theme="dark"] #settingsBack.pageView #settingsModal .sSubHead {
             document.getElementById("mPrice").value = it.price || "";
             document.getElementById("mPriceNote").value = it.priceNote || "";
             document.getElementById("mBoughtPriceField").style.display = it.status === "bought" ? "flex" : "none";
-            document.getElementById("mBoughtPriceDisplay").value = it.boughtPrice ? "₺ " + it.boughtPrice : "";
+            document.getElementById("mBoughtPriceDisplay").value = "₺ " + (it.boughtPrice || 0);
             document.querySelectorAll("#modal .markBoughtMirror, #markBoughtItem").forEach(btn => {
                 btn.style.display = (it.status === "bought" || initialEditItemIds.has(it.id)) ? "none" : "";
             });
@@ -16299,16 +16317,23 @@ body[data-theme="dark"] #settingsBack.pageView #settingsModal .sSubHead {
 
         /* ═══ PURCHASE MODAL ═══ */
         function openPurchaseModal(id) {
+            const it = items.find(x => x.id === id);
+            if (!it) return;
+            const isEdit = it.status === "bought";
             purchaseTargetId = id;
-            purchasePriceInput.value = "";
+            purchasePriceInput.value = isEdit ? String(it.boughtPrice || 0) : "";
+            document.getElementById("purchaseTitle").textContent = isEdit ? "Alış Fiyatını Düzelt" : "Satın Alma Onayı";
+            document.getElementById("purchasePrompt").textContent = isEdit ? "Doğru alış fiyatını gir" : "Ne kadara aldın?";
+            document.getElementById("confirmPurchase").textContent = isEdit ? "Kaydet" : "Onayla";
             purchaseBack.style.display = "flex";
             requestAnimationFrame(() => purchaseBack.classList.add("show"));
             document.body.style.overflow = "hidden";
         }
         function closePurchaseModal() {
+            const returnToDetail = modalBack.classList.contains("show");
             purchaseBack.classList.remove("show");
             setTimeout(() => { purchaseBack.style.display = "none"; }, 280);
-            document.body.style.overflow = "";
+            document.body.style.overflow = returnToDetail ? "hidden" : "";
             purchaseTargetId = null;
         }
         function returnToHomeAfterPurchase() {
@@ -16322,18 +16347,35 @@ body[data-theme="dark"] #settingsBack.pageView #settingsModal .sSubHead {
         }
         closePurchaseBtn.addEventListener("click", closePurchaseModal);
         purchaseBack.addEventListener("click", e => { if (e.target === purchaseBack) closePurchaseModal(); });
+        document.getElementById("editBoughtPrice").addEventListener("click", () => {
+            if (items.some(x => x.id === activeId && x.status === "bought")) openPurchaseModal(activeId);
+        });
 
         document.getElementById("confirmPurchase").addEventListener("click", () => {
             if (!purchaseTargetId) return;
             const it = items.find(x => x.id === purchaseTargetId);
             if (!it) return;
-            const price = parseInt(purchasePriceInput.value, 10) || 0;
+            const isEdit = it.status === "bought";
+            const enteredPrice = purchasePriceInput.value.trim();
+            const price = Number(enteredPrice);
+            if ((isEdit && !enteredPrice) || (enteredPrice && !/^\d+$/.test(enteredPrice)) || !Number.isSafeInteger(price) || price < 0) {
+                showToast("Lütfen geçerli bir alış fiyatı gir.");
+                purchasePriceInput.focus();
+                return;
+            }
             it.status = "bought";
-            it.boughtPrice = price > 0 ? price : 0;
-            it.boughtAt = Date.now();
+            it.boughtPrice = price;
+            if (!isEdit) it.boughtAt = Date.now();
             it.updatedAt = Date.now();
             persist();
             closePurchaseModal();
+            if (isEdit) {
+                document.getElementById("mBoughtPriceDisplay").value = "₺ " + it.boughtPrice;
+                render();
+                document.getElementById("editBoughtPrice").focus();
+                showToast("Alış fiyatı düzeltildi. İstatistikler güncellendi.");
+                return;
+            }
             returnToHomeAfterPurchase();
             showToast("Alınan ürünleri görmek için dokun → 'Alındı'", () => {
                 document.querySelectorAll(".sortPill").forEach(p => p.classList.remove("active"));
