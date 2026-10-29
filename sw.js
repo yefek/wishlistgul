@@ -1,10 +1,17 @@
 // Service Worker - offline support without trapping users on stale HTML
-const CACHE_NAME = 'wishlist-v25';
+const CACHE_NAME = 'wishlist-v27';
 const ASSETS = [
     './',
     './index.html',
     './manifest.json',
     './manifest-dark.json',
+    './favicon.ico?v=3',
+    './favicon.svg?v=3',
+    './favicon-dark.svg?v=3',
+    './favicon-16.png?v=3',
+    './favicon-32.png?v=3',
+    './favicon-16-dark.png?v=3',
+    './favicon-32-dark.png?v=3',
     './icon.svg',
     './icon-dark.svg',
     './icon-192.png',
